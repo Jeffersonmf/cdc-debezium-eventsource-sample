@@ -1,0 +1,49 @@
+docker-compose up
+
+cat script.sql | docker exec -i infra_sqlserver_1 bash -c '/opt/mssql-tools/bin/sqlcmd -U sa -P P@ssw0rd'
+
+docker exec -it infra_kafka_1 sh /usr/bin/kafka-console-consumer -bootstrap-server kafka:9092 -topic sqlserver.dbo.t1 -from-beginning
+
+docker exec -it infra_sqlserver_1 bash -c '/opt/mssql-tools/bin/sqlcmd -U sa -P P@ssw0rd'
+
+curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" http://localhost:8083/connectors/ -d '{"name": "db-connector", "config": {"connector.class" : "io.debezium.connector.sqlserver.SqlServerConnector", "tasks.max" : "1", "database.server.name" : "sqlserver", "database.hostname" : "sqlserver", "database.port" : "1433", "database.user" : "sa", "database.password" : "P@ssw0rd", "database.dbname" : "db", "database.history.kafka.bootstrap.servers" : "kafka:9092", "database.history.kafka.topic": "schema-changes.db"}}'
+
+
+curl -i -X POST -H "Accept:application/json" -H "Content-Type:application/json" http://localhost:8083/connectors/ -d '{"name": "db-connector", "config": {"connector.class" : "io.debezium.connector.sqlserver.SqlServerConnector", "tasks.max" : "1", "database.server.name" : "sqlserver", "database.hostname" : "54.233.210.85", "database.port" : "1433", "database.user" : "marcos.almeida", "database.password" : "tfH}aS7E09DkvsW&#MxYn8QF", "database.dbname" : "valuecanal", "database.history.kafka.bootstrap.servers" : "kafka:9092", "database.history.kafka.topic": "schema-changes.db"}}'
+
+
+
+use valuecanal
+EXEC sys.sp_cdc_enable_db
+go
+use valuecanal
+EXEC sys.sp_cdc_enable_table
+    @source_schema = N'dbo',
+    @source_name = N'tb_paises_cdc_test',
+    @role_name = NULL
+go
+
+
+#Docker KSQL
+docker pull confluentinc/cp-ksql-server
+
+docker run -d \
+  -v /path/on/host:/path/in/container/ \
+  -e KSQL_BOOTSTRAP_SERVERS=localhost:9092 \
+  -e KSQL_KSQL_SERVICE_ID=ksql_standalone_1_ \
+  -e KSQL_KSQL_QUERIES_FILE=/path/in/container/queries.sql \
+  confluentinc/cp-ksql-server:5.1.4
+
+
+  docker run -d \
+  -p 127.0.0.1:8088:8088 \
+  -e KSQL_BOOTSTRAP_SERVERS=localhost:9092 \
+  -e KSQL_LISTENERS=http://0.0.0.0:8088/ \
+  -e KSQL_KSQL_SERVICE_ID=default_ \
+  -e KSQL_KSQL_SINK_REPLICAS=3 \
+  -e KSQL_KSQL_STREAMS_REPLICATION_FACTOR=3 \
+  -e KSQL_KSQL_INTERNAL_TOPIC_REPLICAS=3 \
+  -e KSQL_SECURITY_PROTOCOL=SASL_SSL \
+  -e KSQL_SASL_MECHANISM=PLAIN \
+  -e KSQL_SASL_JAAS_CONFIG="org.apache.kafka.common.security.plain.PlainLoginModule required username=\"<username>\" password=\"<strong-password>\";" \
+  confluentinc/ksqldb-server:0.13.0
